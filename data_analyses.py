@@ -2,6 +2,7 @@
 #Look into improving smoothing of data. Is there a better method than taking N point avg
 #Let python create a folder if it does not exist yet.
 #Is there a way to remove/mask unwanted data points in python?
+#Interpolate function
 #Find best FFT method
 #(extra: Create a better legend with just the filenames)
 
@@ -18,9 +19,10 @@ q = 7   #y value
 xmin = 30.0
 xmax = 36.0
 
-#Do you want to take an N point average? With what N?
-take_avg = False
-N=5
+#Do you want to take an N point average? With what N? How many times?
+take_avg = True
+N = 3
+M = 3
 
 #What degree polynomal do you want fitted?
 deg=2
@@ -31,7 +33,7 @@ create_offset = False
 offset = 0.00001
 offset_increment = 0.00001
 #Want to plot the data?
-plot_data = True
+plot_data = False
 #Data in 1/B? Necessary for FFT analyses
 inv_B = False
 
@@ -41,16 +43,16 @@ write_to_file = False
 
 path = 'C:/Users/bvlaar/surfdrive/Programming/Python-projects/background-subtraction/data/'
 file_list = ['11052018_cell4.002.dat',
-             '11052018_cell4.006.dat',
-             '11052018_cell4.009.dat',
-             '11052018_cell4.012.dat',
-             '12052018_cell4.001.dat',
+             #'11052018_cell4.006.dat',
+             #'11052018_cell4.009.dat',
+             #'11052018_cell4.012.dat',
+             #'12052018_cell4.001.dat',
              #'12052018_cell4.005.dat',
-             '12052018_cell4.007.dat',
-             '12052018_cell4.010up.dat',
-             '12052018_cell4.012.dat',
-             '12052018_cell4.015.dat',
-             '12052018_cell4.017.dat'
+             #'12052018_cell4.007.dat',
+             #'12052018_cell4.010up.dat',
+             #'12052018_cell4.012.dat',
+             #'12052018_cell4.015.dat',
+             #'12052018_cell4.017.dat'
              ]
 
 
@@ -116,7 +118,7 @@ def write_file(header, x,y, path, filename):
 
 
 if (take_avg):
-    print('Taking ', N, 'point average')
+    print('Taking ', N, 'point average, repeating ', M, 'times.')
 if(create_offset and plot_data):
     print('Creating an offset of ', offset_increment)
 if(inv_B):
@@ -132,9 +134,14 @@ for filename in file_list:
     y = np.array(y)
     #Take an N points average:
     if (take_avg):
-        x,y = Npointavg(x,y,N)
-        x = x[int(N/2+1):(len(x)-int(N/2))]
-        y = y[int(N/2+1):len(y)-int(N/2)]
+        for i in range(M):      #Repeat the averaging M times.
+            x,y = Npointavg(x,y,N)
+            x = x[int(N/2+1):(len(x)-int(N/2))]
+            y = y[int(N/2+1):len(y)-int(N/2)]
+            #y_fit = fit_function(x,y,deg)                  #Uncomment to see how taking 
+            #plt.scatter(x,y-y_fit, marker = '+', s=10)     #multiple averages changes data.
+            #plt.plot(x,y-y_fit)                            #
+            
     #Use 1/B instead of B.  
     if(inv_B):
         xlabel = 'inverse field (1/T)'
@@ -163,9 +170,9 @@ for filename in file_list:
     
 if(plot_data):
     plt.xlabel(xlabel)
-    plt.ylabel('torque (a.u.)')
+    #plt.ylabel('torque (a.u.)')
     #plt.legend(bbox_to_anchor=(1, 1.), loc=2, borderaxespad=0.)
-    plt.legend()
+    #plt.legend()
     plt.show()
 
 
