@@ -22,8 +22,8 @@ xmax = 36.0
 
 #Do you want to take an N point average? With what N? How many times?
 take_avg = True
-N = 3
-M = 1
+N = 2
+M = 3
 
 #What degree polynomal do you want fitted?
 deg=2
@@ -137,38 +137,41 @@ def interpolate(x,y,kind):
 
 #============================Main: Call the functions============================#
 if (take_avg):
-    print('Taking ', N, 'point average, repeating ', M, 'times.')
+    print('Taking ', N, 'point average, repeating', M, 'times.')
 if(create_offset and plot_data):
-    print('Creating an offset of ', offset_increment)
+    print('Creating an offset of', offset_increment)
 if(inv_B):
     print('Using 1/B')
 if(interp):
-        print('Interpolating with interp1d kind = ', interpolate_type)
+        print('Interpolating with', interpolate_type, 'interpolation')
 if(write_to_file):
     print('Writing to files')
 
 
 for filename in file_list:
+    #Read data from file, store in header, x, y
     header, x, y = read_file(path+filename, p, q)
     xlabel = header[p]
     x = np.array(x)
     y = np.array(y)
-    #Take an N points average:
+    x_data = x
+    y_data = y
+    
+    #Take an N points average of x and y:
     if (take_avg):
-        y_old = []
         for i in range(M):      #Repeat the averaging M times.
             x,y = Npointavg(x,y,N)
             x = x[int(N/2+1):(len(x)-int(N/2))]
             y = y[int(N/2+1):len(y)-int(N/2)]
             #y_fit = fit_function(x,y,deg)                  #Uncomment to see how taking
             #plt.scatter(x,y-y_fit, marker = '+', s=10)     #multiple averages changes data.
-            #plt.plot(x,y-y_fit)                            #
+            #plt.plot(x,y-y_fit)                            #           
             
+
     #fit the background
     y_fit = fit_function(x, y, deg) 
     #remove the background
-    y = y - y_fit
-
+    y = y - y_fit        
 
     #Use 1/B instead of B.
     if(inv_B):
@@ -177,31 +180,28 @@ for filename in file_list:
             if x[i]!=0:
                 x[i] = 1.0/x[i]
 
-
     #Interpolate (x,y)
     if(interp):
         x_new = np.linspace(x[0], x[len(x)-1], len(x))
         y_int = interpolate(x,y, interpolate_type)
-        #plt.scatter(x_new, y_int(x_new), marker='+', s=5, label = 'interpolate '+interpolate_type)
+        
+        #Uncomment to plot interpolated data in a scatterplot. 
+        #plt.xlim(min(x_new), max(x_new))    #Needed to scale axes when a scatter plot
+        #dy = (max(y) - min(y))*0.1          #is used. Known issue in matplotlib.
+        #plt.ylim(min(y)-dy,max(y)+dy)       #
+        #plt.scatter(x_new, y_int(x_new), marker='+', s=3, label = 'interpolate '+interpolate_type)
 
-        plt.xlim(min(x_new), max(x_new))    #Needed to scale axes when a scatter plot
-        dy = (max(y) - min(y))*0.1          #is used. Known issue in matplotlib.
-        plt.ylim(min(y)-dy,max(y)+dy)       #
-    
-    
-
+    #Writing to file
     if(write_to_file):
         write_file(header,x,y,path,filename)
-
-    #plt.plot(x,y)
-    #plt.plot(x,y_fit)
     
     #Create offset in plot
     if(plot_data):
         if(create_offset):
             y = y+offset
             offset += offset_increment
-        plt.plot(x, y, label = filename, color='green',linewidth=0.5)
+        plt.plot(x, y, label = str(M)+'*'+str(N)+'point average of '+filename, linewidth=0.5)
+        plt.plot(x_new,y_int(x_new), label = interpolate_type+' interpolation', linewidth=0.5)
 
     
 #============================Plotting============================#
