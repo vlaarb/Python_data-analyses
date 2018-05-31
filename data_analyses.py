@@ -3,11 +3,12 @@
 #Let python create a folder if it does not exist yet.
 #Is there a way to remove/mask unwanted data points in python?
 #Interpolate function
-#Find best FFT method
+#Find FFT method, find an optimum between interpolation types, smoothing (averaging) and FFT results
 #(extra: Create a better legend with just the filenames)
 
 
 import numpy as np
+from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import glob
 
@@ -21,21 +22,28 @@ xmax = 36.0
 
 #Do you want to take an N point average? With what N? How many times?
 take_avg = True
-N = 3
+N = 2
 M = 3
 
 #What degree polynomal do you want fitted?
 deg=2
 
-#Plotting:
+#Data in 1/B? Necessary for FFT analyses
+inv_B = True
+
+#Do you want to interpolate, and what type? (Linear, cubic)
+interp = True
+interpolate_type='linear'
+
+
+#=============output:=============#
+#Want to plot the data?
+plot_data = True
+
 #Create offset?
 create_offset = False
 offset = 0.00001
 offset_increment = 0.00001
-#Want to plot the data?
-plot_data = False
-#Data in 1/B? Necessary for FFT analyses
-inv_B = False
 
 #Want to write to a file?
 ################IN PROGRESS####################
@@ -57,6 +65,8 @@ file_list = ['11052018_cell4.002.dat',
 
 
 
+#============================File handling functions============================#
+
 #Read columns from file into x and y lists.
 def read_file(filename, p, q):
     fpi = open(filename,'r')
@@ -75,7 +85,19 @@ def read_file(filename, p, q):
     fpi.close()
     return header, x, y
 
-#Fit (x,y)
+def write_file(header, x,y, path, filename):
+    #Open/create a file in subfolder: 'background_subtracted'
+    fpo = open(path+'/background_subtracted/'+filename[:len(filename)-4]+'output.dat', 'w+')
+    fpo.write(header[p]+'\t'+header[q]+'\n')
+    if(len(x)!=len(y)):
+       print('Error: Length x and y not equal')
+    for i in range(len(x)):
+       fpo.write(str(x[i]) + '\t' + str(y[i]) + '\n')
+    fpo.close()
+
+#============================Data manipulation============================#
+
+#Fit (x,y) with a polynomial of degree 'deg'
 #Creates a list y_fit with the fitted values.
 def fit_function(x, y, deg):
     fit_coefs = np.polyfit(x, y, deg)
@@ -87,6 +109,7 @@ def fit_function(x, y, deg):
             deg_temp += 1
     return y_fit
 
+#Take an N point average around each point.
 def Npointavg(x, y, N):
     if len(x)!=len(y):
         print('Error: Length of x and y is not equal!')
@@ -104,75 +127,90 @@ def Npointavg(x, y, N):
             y_avg[i]=y_temp/N
     return x_avg, y_avg
 
-def write_file(header, x,y, path, filename):
-    #Open/create a file in subfolder: 'background_subtracted'
-    fpo = open(path+'/background_subtracted/'+filename[:len(filename)-4]+'output.dat', 'w+')
-    fpo.write(header[p]+'\t'+header[q]+'\n')
-    if(len(x)!=len(y)):
-       print('Error: Length x and y not equal')
-    for i in range(len(x)):
-       fpo.write(str(x[i]) + '\t' + str(y[i]) + '\n')
-    fpo.close()
+#Interpolation
+def interpolate(x,y,kind):
+    f = interp1d(x,y, kind=kind)
+    return f
+    
     
 
 
-
+#============================Main: Call the functions============================#
 if (take_avg):
-    print('Taking ', N, 'point average, repeating ', M, 'times.')
+    print('Taking ', N, 'point average, repeating', M, 'times.')
 if(create_offset and plot_data):
-    print('Creating an offset of ', offset_increment)
+    print('Creating an offset of', offset_increment)
 if(inv_B):
     print('Using 1/B')
+if(interp):
+        print('Interpolating with', interpolate_type, 'interpolation')
 if(write_to_file):
     print('Writing to files')
 
 
 for filename in file_list:
+    #Read data from file, store in header, x, y
     header, x, y = read_file(path+filename, p, q)
     xlabel = header[p]
     x = np.array(x)
     y = np.array(y)
-    #Take an N points average:
+    x_data = x
+    y_data = y
+    
+    #Take an N points average of x and y:
     if (take_avg):
         for i in range(M):      #Repeat the averaging M times.
             x,y = Npointavg(x,y,N)
             x = x[int(N/2+1):(len(x)-int(N/2))]
             y = y[int(N/2+1):len(y)-int(N/2)]
-            #y_fit = fit_function(x,y,deg)                  #Uncomment to see how taking 
+            #y_fit = fit_function(x,y,deg)                  #Uncomment to see how taking
             #plt.scatter(x,y-y_fit, marker = '+', s=10)     #multiple averages changes data.
-            #plt.plot(x,y-y_fit)                            #
+            #plt.plot(x,y-y_fit)                            #           
             
-    #Use 1/B instead of B.  
+
+    #fit the background
+    y_fit = fit_function(x, y, deg) 
+    #remove the background
+    y = y - y_fit        
+
+    #Use 1/B instead of B.
     if(inv_B):
         xlabel = 'inverse field (1/T)'
         for i in range(len(x)):
             if x[i]!=0:
                 x[i] = 1.0/x[i]
-    
-    y_fit = fit_function(x, y, deg)
-    
 
+    #Interpolate (x,y)
+    if(interp):
+        x_new = np.linspace(x[0], x[len(x)-1], len(x))
+        y_int = interpolate(x,y, interpolate_type)
+        
+        #Uncomment to plot interpolated data in a scatterplot. 
+        #plt.xlim(min(x_new), max(x_new))    #Needed to scale axes when a scatter plot
+        #dy = (max(y) - min(y))*0.1          #is used. Known issue in matplotlib.
+        #plt.ylim(min(y)-dy,max(y)+dy)       #
+        #plt.scatter(x_new, y_int(x_new), marker='+', s=3, label = 'interpolate '+interpolate_type)
+
+    #Writing to file
     if(write_to_file):
         write_file(header,x,y,path,filename)
-
-    #plt.plot(x,y)
-    #plt.plot(x,y_fit)
     
     #Create offset in plot
     if(plot_data):
         if(create_offset):
             y = y+offset
             offset += offset_increment
-        plt.plot(x, y-y_fit, label = filename, linewidth=0.5)    #Subtract background
+        plt.plot(x, y, label = str(M)+'*'+str(N)+'point average of '+filename, linewidth=0.5)
+        plt.plot(x_new,y_int(x_new), label = interpolate_type+' interpolation', linewidth=0.5)
 
     
-    
+#============================Plotting============================#
     
 if(plot_data):
     plt.xlabel(xlabel)
     #plt.ylabel('torque (a.u.)')
-    #plt.legend(bbox_to_anchor=(1, 1.), loc=2, borderaxespad=0.)
-    #plt.legend()
+    plt.legend()
+    
     plt.show()
 
 
