@@ -8,6 +8,7 @@
 
 
 import numpy as np
+from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import glob
 
@@ -20,20 +21,27 @@ xmin = 30.0
 xmax = 36.0
 
 #Do you want to take an N point average? With what N? How many times?
-take_avg = True
+take_avg = False
 N = 3
-M = 3
+M = 1
 
 #What degree polynomal do you want fitted?
 deg=2
 
+#Do you want to interpolate, and what type? (Linear, cubic)
+interpolate = True
+interpolate_type='linear'
+
+
 #Plotting:
+#Want to plot the data?
+plot_data = True
+
 #Create offset?
 create_offset = False
 offset = 0.00001
 offset_increment = 0.00001
-#Want to plot the data?
-plot_data = False
+
 #Data in 1/B? Necessary for FFT analyses
 inv_B = False
 
@@ -57,6 +65,8 @@ file_list = ['11052018_cell4.002.dat',
 
 
 
+#============================File handling functions============================#
+
 #Read columns from file into x and y lists.
 def read_file(filename, p, q):
     fpi = open(filename,'r')
@@ -75,7 +85,19 @@ def read_file(filename, p, q):
     fpi.close()
     return header, x, y
 
-#Fit (x,y)
+def write_file(header, x,y, path, filename):
+    #Open/create a file in subfolder: 'background_subtracted'
+    fpo = open(path+'/background_subtracted/'+filename[:len(filename)-4]+'output.dat', 'w+')
+    fpo.write(header[p]+'\t'+header[q]+'\n')
+    if(len(x)!=len(y)):
+       print('Error: Length x and y not equal')
+    for i in range(len(x)):
+       fpo.write(str(x[i]) + '\t' + str(y[i]) + '\n')
+    fpo.close()
+
+#============================Data manipulation============================#
+
+#Fit (x,y) with a polynomial of degree 'deg'
 #Creates a list y_fit with the fitted values.
 def fit_function(x, y, deg):
     fit_coefs = np.polyfit(x, y, deg)
@@ -87,6 +109,7 @@ def fit_function(x, y, deg):
             deg_temp += 1
     return y_fit
 
+#Take an N point average around each point.
 def Npointavg(x, y, N):
     if len(x)!=len(y):
         print('Error: Length of x and y is not equal!')
@@ -104,19 +127,14 @@ def Npointavg(x, y, N):
             y_avg[i]=y_temp/N
     return x_avg, y_avg
 
-def write_file(header, x,y, path, filename):
-    #Open/create a file in subfolder: 'background_subtracted'
-    fpo = open(path+'/background_subtracted/'+filename[:len(filename)-4]+'output.dat', 'w+')
-    fpo.write(header[p]+'\t'+header[q]+'\n')
-    if(len(x)!=len(y)):
-       print('Error: Length x and y not equal')
-    for i in range(len(x)):
-       fpo.write(str(x[i]) + '\t' + str(y[i]) + '\n')
-    fpo.close()
+#Interpolation
+def interpolate(x,y,kind):
+    f = interp1d(x,y, kind=kind)
+    
     
 
 
-
+#============================Main: Call the functions============================#
 if (take_avg):
     print('Taking ', N, 'point average, repeating ', M, 'times.')
 if(create_offset and plot_data):
@@ -141,6 +159,12 @@ for filename in file_list:
             #y_fit = fit_function(x,y,deg)                  #Uncomment to see how taking 
             #plt.scatter(x,y-y_fit, marker = '+', s=10)     #multiple averages changes data.
             #plt.plot(x,y-y_fit)                            #
+
+    #fit the background
+    y_fit = fit_function(x, y, deg) 
+    #remove the background
+    y = y - y_fit
+
             
     #Use 1/B instead of B.  
     if(inv_B):
@@ -148,8 +172,12 @@ for filename in file_list:
         for i in range(len(x)):
             if x[i]!=0:
                 x[i] = 1.0/x[i]
+
+    #Interpolate (x,y)
+    #if(interpolate):
+        
     
-    y_fit = fit_function(x, y, deg)
+    
     
 
     if(write_to_file):
@@ -163,10 +191,10 @@ for filename in file_list:
         if(create_offset):
             y = y+offset
             offset += offset_increment
-        plt.plot(x, y-y_fit, label = filename, linewidth=0.5)    #Subtract background
+        plt.plot(x, y, label = filename, linewidth=0.5)
 
     
-    
+#============================Plotting============================#
     
 if(plot_data):
     plt.xlabel(xlabel)
