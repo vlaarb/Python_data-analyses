@@ -3,7 +3,7 @@
 #Let python create a folder if it does not exist yet.
 #Is there a way to remove/mask unwanted data points in python?
 #Interpolate function
-#Find best FFT method
+#Find FFT method, find an optimum between interpolation types, smoothing (averaging) and FFT results
 #(extra: Create a better legend with just the filenames)
 
 
@@ -21,19 +21,22 @@ xmin = 30.0
 xmax = 36.0
 
 #Do you want to take an N point average? With what N? How many times?
-take_avg = False
+take_avg = True
 N = 3
 M = 1
 
 #What degree polynomal do you want fitted?
 deg=2
 
+#Data in 1/B? Necessary for FFT analyses
+inv_B = True
+
 #Do you want to interpolate, and what type? (Linear, cubic)
-interpolate = True
+interp = True
 interpolate_type='linear'
 
 
-#Plotting:
+#=============output:=============#
 #Want to plot the data?
 plot_data = True
 
@@ -41,9 +44,6 @@ plot_data = True
 create_offset = False
 offset = 0.00001
 offset_increment = 0.00001
-
-#Data in 1/B? Necessary for FFT analyses
-inv_B = False
 
 #Want to write to a file?
 ################IN PROGRESS####################
@@ -130,6 +130,7 @@ def Npointavg(x, y, N):
 #Interpolation
 def interpolate(x,y,kind):
     f = interp1d(x,y, kind=kind)
+    return f
     
     
 
@@ -141,6 +142,8 @@ if(create_offset and plot_data):
     print('Creating an offset of ', offset_increment)
 if(inv_B):
     print('Using 1/B')
+if(interp):
+        print('Interpolating with interp1d kind = ', interpolate_type)
 if(write_to_file):
     print('Writing to files')
 
@@ -152,31 +155,38 @@ for filename in file_list:
     y = np.array(y)
     #Take an N points average:
     if (take_avg):
+        y_old = []
         for i in range(M):      #Repeat the averaging M times.
             x,y = Npointavg(x,y,N)
             x = x[int(N/2+1):(len(x)-int(N/2))]
             y = y[int(N/2+1):len(y)-int(N/2)]
-            #y_fit = fit_function(x,y,deg)                  #Uncomment to see how taking 
+            #y_fit = fit_function(x,y,deg)                  #Uncomment to see how taking
             #plt.scatter(x,y-y_fit, marker = '+', s=10)     #multiple averages changes data.
             #plt.plot(x,y-y_fit)                            #
-
+            
     #fit the background
     y_fit = fit_function(x, y, deg) 
     #remove the background
     y = y - y_fit
 
-            
-    #Use 1/B instead of B.  
+
+    #Use 1/B instead of B.
     if(inv_B):
         xlabel = 'inverse field (1/T)'
         for i in range(len(x)):
             if x[i]!=0:
                 x[i] = 1.0/x[i]
 
+
     #Interpolate (x,y)
-    #if(interpolate):
-        
-    
+    if(interp):
+        x_new = np.linspace(x[0], x[len(x)-1], len(x))
+        y_int = interpolate(x,y, interpolate_type)
+        #plt.scatter(x_new, y_int(x_new), marker='+', s=5, label = 'interpolate '+interpolate_type)
+
+        plt.xlim(min(x_new), max(x_new))    #Needed to scale axes when a scatter plot
+        dy = (max(y) - min(y))*0.1          #is used. Known issue in matplotlib.
+        plt.ylim(min(y)-dy,max(y)+dy)       #
     
     
 
@@ -191,7 +201,7 @@ for filename in file_list:
         if(create_offset):
             y = y+offset
             offset += offset_increment
-        plt.plot(x, y, label = filename, linewidth=0.5)
+        plt.plot(x, y, label = filename, color='green',linewidth=0.5)
 
     
 #============================Plotting============================#
@@ -199,8 +209,8 @@ for filename in file_list:
 if(plot_data):
     plt.xlabel(xlabel)
     #plt.ylabel('torque (a.u.)')
-    #plt.legend(bbox_to_anchor=(1, 1.), loc=2, borderaxespad=0.)
-    #plt.legend()
+    plt.legend()
+    
     plt.show()
 
 
