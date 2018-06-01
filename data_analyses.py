@@ -3,12 +3,15 @@
 #Let python create a folder if it does not exist yet.
 #Is there a way to remove/mask unwanted data points in python?
 #Interpolate function
-#Find FFT method, find an optimum between interpolation types, smoothing (averaging) and FFT results
+#find a way to create evenly spaced data. 
+#Find FFT method,atm trying to understand what the frequency axis and intensity axis mean.
+#find an optimum between interpolation types, smoothing (averaging) and FFT results
 #(extra: Create a better legend with just the filenames)
 
 
 import numpy as np
 from scipy.interpolate import interp1d
+import scipy.fftpack
 import matplotlib.pyplot as plt
 import glob
 
@@ -23,7 +26,7 @@ xmax = 36.0
 #Do you want to take an N point average? With what N? How many times?
 take_avg = True
 N = 2
-M = 3
+M = 1
 
 #What degree polynomal do you want fitted?
 deg=2
@@ -33,12 +36,19 @@ inv_B = True
 
 #Do you want to interpolate, and what type? (Linear, cubic)
 interp = True
-interpolate_type='linear'
+interpolate_type='cubic'
+
+#Do you want to perform an FFT? And do you want to plot it and/or write to file?
+fft = True
+fmin = 0             #Give min frequency in T
+fmax = 5000         #Give max frequency in T
+plot_fft = True
+write_fft_to_file = False
 
 
 #=============output:=============#
 #Want to plot the data?
-plot_data = True
+plot_data = False
 
 #Create offset?
 create_offset = False
@@ -47,10 +57,12 @@ offset_increment = 0.00001
 
 #Want to write to a file?
 ################IN PROGRESS####################
-write_to_file = False
+write_to_file = True
 
 path = 'C:/Users/bvlaar/surfdrive/Programming/Python-projects/background-subtraction/data/'
-file_list = ['11052018_cell4.002.dat',
+file_list = ['sindata.dat'
+
+            #'11052018_cell4.002.dat',
              #'11052018_cell4.006.dat',
              #'11052018_cell4.009.dat',
              #'11052018_cell4.012.dat',
@@ -95,6 +107,14 @@ def write_file(header, x,y, path, filename):
        fpo.write(str(x[i]) + '\t' + str(y[i]) + '\n')
     fpo.close()
 
+def write_fft(xf, yf, path, filename):
+    fpo = open(path+'/fft/'+filename[:len(filename)-4]+'_fft.dat', 'w+')
+    fpo.write('frequency (kT) \t Intensity \n')
+    
+    for i in range(len(xf)):
+        fpo.write(str(xf[i]) + '\t' + str(2.0/len(x)*abs(yf[:len(x)//2])) + '\n')
+    fpo.close()
+
 #============================Data manipulation============================#
 
 #Fit (x,y) with a polynomial of degree 'deg'
@@ -132,7 +152,15 @@ def interpolate(x,y,kind):
     f = interp1d(x,y, kind=kind)
     return f
     
-    
+#Fourier Transformation
+def fft_data(x,y):
+    #Number of samplepoints:
+    N=len(x)
+    #Sample point spacing:
+    T=max(x)/N
+    xf = np.linspace(0.0,1./(2.*T),N/2)
+    yf = scipy.fftpack.fft(y)
+    return xf,yf
 
 
 #============================Main: Call the functions============================#
@@ -146,6 +174,12 @@ if(interp):
         print('Interpolating with', interpolate_type, 'interpolation')
 if(write_to_file):
     print('Writing to files')
+if(fft):
+    print('Performing FFT on the data')
+    if(plot_fft):
+        print('Plotting FFT')
+    if(write_fft_to_file):
+        print('Writing FFT data to file')
 
 
 for filename in file_list:
@@ -165,7 +199,7 @@ for filename in file_list:
             y = y[int(N/2+1):len(y)-int(N/2)]
             #y_fit = fit_function(x,y,deg)                  #Uncomment to see how taking
             #plt.scatter(x,y-y_fit, marker = '+', s=10)     #multiple averages changes data.
-            #plt.plot(x,y-y_fit)                            #           
+            #plt.plot(x,y-y_fit)                            #y is fitted after each average.           
             
 
     #fit the background
@@ -179,38 +213,69 @@ for filename in file_list:
         for i in range(len(x)):
             if x[i]!=0:
                 x[i] = 1.0/x[i]
+        for i in range(len(x_data)):                    #Also change the x data to 1/B to
+            if x_data[i]!=0:                            #compare the data with the averaged
+                x_data[i] = 1./x_data[i]                #and interpolated plots
 
     #Interpolate (x,y)
     if(interp):
-        x_new = np.linspace(x[0], x[len(x)-1], len(x))
+        x_int = np.linspace(x[0], x[len(x)-1], len(x))
         y_int = interpolate(x,y, interpolate_type)
-        
+
         #Uncomment to plot interpolated data in a scatterplot. 
         #plt.xlim(min(x_new), max(x_new))    #Needed to scale axes when a scatter plot
         #dy = (max(y) - min(y))*0.1          #is used. Known issue in matplotlib.
         #plt.ylim(min(y)-dy,max(y)+dy)       #
         #plt.scatter(x_new, y_int(x_new), marker='+', s=3, label = 'interpolate '+interpolate_type)
 
-    #Writing to file
-    if(write_to_file):
-        write_file(header,x,y,path,filename)
     
     #Create offset in plot
     if(plot_data):
         if(create_offset):
             y = y+offset
             offset += offset_increment
-        plt.plot(x, y, label = str(M)+'*'+str(N)+'point average of '+filename, linewidth=0.5)
-        plt.plot(x_new,y_int(x_new), label = interpolate_type+' interpolation', linewidth=0.5)
 
+        plt.figure(1)
+        #Plot the data with a background subtracted
+        plt.plot(x_data, y_data-fit_function(x_data, y_data,deg), label = filename, linewidth=0.5)
+        #Plot average data with a background subtracted
+        plt.plot(x, y, label = str(M)+'*'+str(N)+'point average of '+filename, linewidth=0.5)
+        #Plot the interpolation of above plot.
+        plt.plot(x_int,y_int(x_int), label = interpolate_type+' interpolation', linewidth=0.5)
+
+        #Uncomment to plot interpolated data in a scatterplot. 
+        #plt.xlim(min(x_int), max(x_int))    #Needed to scale axes when a scatter plot
+        #dy = (max(y) - min(y))*0.1          #is used. Known issue in matplotlib.
+        #plt.ylim(min(y)-dy,max(y)+dy)       #
+        #plt.scatter(x_int, y_int(x_int),s=3, facecolor='0.0', marker='+', label = 'interpolate '+interpolate_type)
+
+
+
+        
+    #Writing to file
+    if(write_to_file):
+        write_file(header,x_int,y_int(x_int),path,filename)
+
+
+    if(fft):
+        xf,yf = fft_data(x_int,y_int(x_int))
+        if(plot_fft):
+            plt.figure(2)
+            xlabel = 'Frequency'
+            plt.plot(xf,2.0/len(x)*abs(yf[:len(x)//2]),label = 'FFT of '+filename)
+        if(write_fft_to_file):
+            write_fft(xf,yf,path,filename)
+                            
+        
     
 #============================Plotting============================#
     
-if(plot_data):
+if(plot_data or (fft and plot_fft)):
     plt.xlabel(xlabel)
     #plt.ylabel('torque (a.u.)')
     plt.legend()
-    
+    if(fft and plot_fft):
+        plt.xlim(fmin, fmax)
     plt.show()
 
 
